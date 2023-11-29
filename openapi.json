@@ -1,0 +1,504 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "procon34 api",
+    "description": "第34回高専プロコン競技部門で使用するAPIサーバーの仕様です。\n\n### 認証\n認証にはチームごとに事前配布したトークンを用います。\\\nトークンをクエリパラメータ(token)かヘッダー(procon-token)に指定してリクエストしてください。\n\n### 基本的な流れ\n1. 試合開始前に[試合一覧取得API](#operation/ListMatches)から参加する試合の情報を取得する\n1. 試合開始後に試合IDを用いて[試合状態取得API](#operation/GetMatch)からそれぞれの試合の情報を取得する\n1. それぞれの試合で行動が適用されるまでに[行動計画更新API](#operation/UpdateActionPlans)を使って行動を決定する\n1. 試合終了まで 2 と 3 を繰り返す\n\n### Tips\nAPIサーバーの挙動が想定外で問い合わせしたい場合はリクエストとレスポンスのログが必要になることがあります。\\\n試合中のリクエストとレスポンスは保存しておくことをおすすめします。",
+    "version": "1.0"
+  },
+  "paths": {
+    "/matches": {
+      "get": {
+        "operationId": "ListMatches",
+        "summary": "試合一覧取得API",
+        "description": "参加する試合の一覧を取得するAPIです",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "token",
+            "description": "トークン",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "procon-token",
+            "description": "トークン",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "正常",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListMatchesResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/matches/{id}": {
+      "get": {
+        "operationId": "GetMatch",
+        "summary": "試合状態取得API",
+        "description": "試合の状態を取得するAPIです",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "token",
+            "description": "トークン",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "procon-token",
+            "description": "トークン",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "description": "試合ID",
+            "schema": {
+              "type": "integer"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "正常",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetMatchResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "UpdateActionPlans",
+        "summary": "行動計画更新API",
+        "description": "現在のターンに対する行動計画を更新するAPIです\t",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "token",
+            "description": "トークン",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "procon-token",
+            "description": "トークン",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "description": "試合ID",
+            "schema": {
+              "type": "integer"
+            },
+            "required": true
+          }
+        ],
+        "requestBody": {
+          "description": "現在のターンに対する行動計画。\\\nn番目の行動計画はn番目の職人に対するものです。\\\ntype が滞在の場合は dir を無方向に指定してください",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateActionPlansRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "正常",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateActionPlansResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Action": {
+        "description": "行動です",
+        "type": "object",
+        "properties": {
+          "succeeded": {
+            "description": "行動の結果です。\\\n行動が成功した場合 true になります",
+            "type": "boolean"
+          }
+        },
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ActionPlan"
+          },
+          {
+            "required": [
+              "succeeded"
+            ]
+          }
+        ]
+      },
+      "ActionPlan": {
+        "description": "行動計画です。\\\ntype が滞在の場合は dir を無方向に指定してください",
+        "type": "object",
+        "required": [
+          "type",
+          "dir"
+        ],
+        "properties": {
+          "type": {
+            "$ref": "#/components/schemas/ActionType"
+          },
+          "dir": {
+            "$ref": "#/components/schemas/Dir"
+          }
+        }
+      },
+      "ActionType": {
+        "description": "行動タイプです。\\\n0: 滞在, 1: 移動, 2: 建築, 3: 解体",
+        "type": "integer",
+        "enum": [
+          0,
+          1,
+          2,
+          3
+        ]
+      },
+      "Board": {
+        "description": "競技ボードの情報です。\\\nstrctures, masons は配列の長さが height で子要素はすべて配列の長さが width です。\\\n各配列のy番目の要素の配列のx番目の要素が座標 (x,y) に対応します",
+        "type": "object",
+        "required": [
+          "width",
+          "height",
+          "mason",
+          "structures",
+          "masons"
+        ],
+        "properties": {
+          "width": {
+            "description": "横の分割数です",
+            "type": "integer",
+            "minimum": 11,
+            "maximum": 25
+          },
+          "height": {
+            "description": "縦の分割数です",
+            "type": "integer",
+            "minimum": 11,
+            "maximum": 25
+          },
+          "mason": {
+            "description": "職人の数です",
+            "type": "integer",
+            "minimum": 2,
+            "maximum": 6
+          },
+          "structures": {
+            "description": "配置されている構造物です。\\\n0: 無配置, 1: 池, 2: 城",
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/Structure"
+              }
+            }
+          },
+          "masons": {
+            "description": "配置されている職人です。\\\n自チームの職人のIDが正, 相手チームの職人のIDが負です",
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/MasonID"
+              }
+            }
+          }
+        }
+      },
+      "BoardDetail": {
+        "description": "競技ボードの詳細な情報です。\\\nstrctures, masons, walls, territories は配列の長さが height で子要素はすべて配列の長さが width です。\\\n各配列のy番目の要素の配列のx番目の要素が座標 (x,y) に対応します",
+        "type": "object",
+        "properties": {
+          "walls": {
+            "description": "配置されている城壁の情報です。\\\n0: なし, 1: 自チームの城壁, 2: 相手チームの城壁",
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/Wall"
+              }
+            }
+          },
+          "territories": {
+            "description": "陣地の情報です。\\\n0: 中立, 1: 自チームの陣地, 2: 相手チームの陣地, 3: 両チームの陣地",
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/Territory"
+              }
+            }
+          }
+        },
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Board"
+          },
+          {
+            "required": [
+              "walls",
+              "territories"
+            ]
+          }
+        ]
+      },
+      "Dir": {
+        "description": "競技ボードの左上を (1,1) とする座標系における方向です。\\\n0: 無方向, 1: 左上, 2: 上, 3: 右上, 4: 右, 5: 右下, 6: 下, 7: 左下, 8: 左",
+        "type": "integer",
+        "enum": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ]
+      },
+      "GetMatchResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "turn",
+          "board",
+          "logs"
+        ],
+        "properties": {
+          "id": {
+            "description": "試合のIDです",
+            "type": "integer",
+            "minimum": 0
+          },
+          "turn": {
+            "description": "どのターンの競技ボードの情報かです",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 200
+          },
+          "board": {
+            "$ref": "#/components/schemas/BoardDetail"
+          },
+          "logs": {
+            "description": "これまでに適応された行動のログです。\\\nターンが昇順で返されます",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "turn",
+                "actions"
+              ],
+              "properties": {
+                "turn": {
+                  "description": "どのターンに実施された行動かです",
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 200
+                },
+                "actions": {
+                  "description": "実施された行動です。\\\nn番目の行動はn番目の職人に対するものです",
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Action"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "ListMatchesResponse": {
+        "type": "object",
+        "required": [
+          "matches"
+        ],
+        "properties": {
+          "matches": {
+            "description": "参加する試合の一覧です。\\\n同時に複数試合実施することがあります",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "turns",
+                "turnSeconds",
+                "bonus",
+                "board",
+                "opponent",
+                "first"
+              ],
+              "properties": {
+                "id": {
+                  "description": "試合のIDです",
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "turns": {
+                  "description": "試合のターン数です",
+                  "type": "integer",
+                  "minimum": 30,
+                  "maximum": 200
+                },
+                "turnSeconds": {
+                  "description": "試合のターンあたりの秒数です",
+                  "type": "integer",
+                  "minimum": 3,
+                  "maximum": 15
+                },
+                "bonus": {
+                  "description": "試合の得点の係数です",
+                  "type": "object",
+                  "required": [
+                    "wall",
+                    "territory",
+                    "castle"
+                  ],
+                  "properties": {
+                    "wall": {
+                      "description": "城壁係数です",
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 100
+                    },
+                    "territory": {
+                      "description": "陣地係数です",
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 100
+                    },
+                    "castle": {
+                      "description": "城係数です",
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 100
+                    }
+                  }
+                },
+                "board": {
+                  "$ref": "#/components/schemas/Board"
+                },
+                "opponent": {
+                  "description": "相手のチーム名です",
+                  "type": "string"
+                },
+                "first": {
+                  "description": "自チームが先手かどうかです",
+                  "type": "boolean"
+                }
+              }
+            }
+          }
+        }
+      },
+      "MasonID": {
+        "description": "職人のIDです。\\\n自チームのIDが正, 相手チームのIDが負です",
+        "type": "integer",
+        "minimum": -6,
+        "maximum": 6
+      },
+      "Structure": {
+        "description": "構造物の種別です。\\\n0: 無配置, 1: 池, 2: 城",
+        "type": "integer",
+        "enum": [
+          0,
+          1,
+          2
+        ]
+      },
+      "Territory": {
+        "description": "陣地の属性です。\\\n0: 中立, 1: 自チームの陣地, 2: 相手チームの陣地, 3: 両チームの陣地",
+        "type": "integer",
+        "enum": [
+          0,
+          1,
+          2,
+          3
+        ]
+      },
+      "UpdateActionPlansRequest": {
+        "type": "object",
+        "required": [
+          "turn",
+          "actions"
+        ],
+        "properties": {
+          "turn": {
+            "description": "行動を計画しているターンです。次のターンより先のターンは指定できません。\\\n意図してないターンに行動が実施されるのを防ぐためのものです",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 200
+          },
+          "actions": {
+            "description": "職人の行動計画です。\\\nn番目の行動計画はn番目の職人に対するものです",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActionPlan"
+            }
+          }
+        }
+      },
+      "UpdateActionPlansResponse": {
+        "type": "object",
+        "required": [
+          "accepted_at"
+        ],
+        "properties": {
+          "accepted_at": {
+            "description": "リクエストがサーバー上で受理されたUNIX時間です。\\\n並列してリクエストを行った場合、この値が最も大きいリクエストが最終的に受理されています。\\\nリクエストした順ではないことに気をつけてください",
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "Wall": {
+        "description": "城壁の情報です。\\\n0: なし, 1: 自チームの城壁, 2: 相手チームの城壁",
+        "type": "integer",
+        "enum": [
+          0,
+          1,
+          2
+        ]
+      }
+    }
+  }
+}
